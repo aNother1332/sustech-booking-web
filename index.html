@@ -306,12 +306,16 @@ function renderCourts(){
   if(!SNAPSHOT)return;
   CUR_GYM=$1("#gymSel").value;
   $1("#courtBox").style.display="";
-  const courts=(SNAPSHOT.courts||[]).filter(c=>!c.error);
+  const all=(SNAPSHOT.courts||[]);
+  const ok=all.filter(c=>!c.error);
+  const bad=all.filter(c=>c.error);
   const sel=$1("#courtSel");
-  sel.innerHTML='<option value="">— 选择场地 —</option>'+courts.map(c=>
-    `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  sel.innerHTML='<option value="">— 选择场地 —</option>'+
+    ok.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")+
+    bad.map(c=>`<option disabled>${esc(c.name)}（上次获取失败，请重新刷新）</option>`).join("");
+  if(bad.length)$1("#snapMsg").textContent=($1("#snapMsg").textContent.split("｜")[0])+" ｜ ⚠ "+bad.length+" 块场地未取到数据，可再点「刷新场次」";
   $1("#dayArea").style.display="none";
-  if(courts.length===1){sel.value=courts[0].id;renderDays()}
+  if(ok.length===1){sel.value=ok[0].id;renderDays()}
   renderPicks();
 }
 function currentCourt(){
