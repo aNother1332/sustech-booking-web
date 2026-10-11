@@ -429,8 +429,8 @@ async function createTasks(){
   if(pending.length>1)toast(`登录链接是一次性的，本次只创建第 1 个：${pending[0].courtName} ${pending[0].date}；其余请重新扫码后再创建`);
   try{
     for(const p of pending.slice(0,1)){
-      const now=new Date();
-      const fireTime=p.mode==="rush"?fire:`${p2(now.getHours())}:${p2(now.getMinutes())}:${p2(now.getSeconds())}`;
+      // 订场=立即执行：用 00:00:01 传递（运行器无论何时启动都已过零时，不会因跨天误等待）
+      const fireTime=p.mode==="rush"?fire:"00:00:01";
       const run=await dispatchWorkflow("grab.yml",{
         login_url:LOGIN_URL,
         gym_id:String(p.gymId),
