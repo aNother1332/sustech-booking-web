@@ -287,9 +287,12 @@ async function refreshSnapshot(){
     if(!run)throw new Error("未找到运行记录");
     markLoginUsed();
     $1("#snapMsg").innerHTML=`刷新中… <a href="${runUrl(run.id)}" target="_blank">查看进度</a>`;
-    await waitRun(run.id,240000);
+    const fin=await waitRun(run.id,240000);
     await loadSnapshot();
-    toast("场次已刷新");
+    if(fin&&fin.conclusion!=="success"){
+      toast("刷新未成功（学校接口可能暂不可用），已保留上次数据");
+      $1("#snapMsg").innerHTML+=` ｜ <span style="color:var(--amber)">本次刷新未成功，显示的是旧数据</span>`;
+    }else{toast("场次已刷新");}
   }catch(e){toast("刷新失败："+e.message)}
   btn.disabled=false;btn.textContent="刷新场次（约 1 分钟）";
 }
@@ -311,9 +314,11 @@ function renderCourts(){
   const bad=all.filter(c=>c.error);
   const sel=$1("#courtSel");
   sel.innerHTML='<option value="">— 选择场地 —</option>'+
-    ok.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")+
-    bad.map(c=>`<option disabled>${esc(c.name)}（上次获取失败，请重新刷新）</option>`).join("");
-  if(bad.length)$1("#snapMsg").textContent=($1("#snapMsg").textContent.split("｜")[0])+" ｜ ⚠ "+bad.length+" 块场地未取到数据，可再点「刷新场次」";
+    all.map(c=>{
+      const staleTag=(c.days&&c.days.length&&c.stale)?"（数据为缓存）":(c.error?"（数据未获取·仍可抢后天）":"");
+      return `<option value="${c.id}">${esc(c.name)}${staleTag}</option>`;
+    }).join("");
+  if(bad.length)$1("#snapMsg").textContent=($1("#snapMsg").textContent.split("｜")[0])+" ｜ ⚠ "+bad.length+" 块场地未取到实时数据（抢场不受影响）";
   $1("#dayArea").style.display="none";
   if(ok.length===1){sel.value=ok[0].id;renderDays()}
   renderPicks();
@@ -332,7 +337,15 @@ function renderDays(){
   CUR_COURT=currentCourt();
   if(!CUR_COURT){$1("#dayArea").style.display="none";return}
   $1("#dayArea").style.display="";
-  window._days=(CUR_COURT.days||[]).map(d=>({
+  let daySrc=(CUR_COURT.days||[]);
+  if(!daySrc.length){
+    // 数据未获取的场地：抢场网格不依赖实时数据，本地按标准档位合成
+    const before20=new Date().getHours()<20;
+    daySrc=[0,1,2].map(off=>(off===2&&before20)
+      ?{date:localDate(2),mode:"rush",blocks:synthBlocks()}
+      :{date:localDate(off),mode:"book",blocks:[]});
+  }
+  window._days=daySrc.map(d=>({
     date:d.date, mode:d.mode,
     blocks:(d.blocks==="placeholder"||!Array.isArray(d.blocks))?synthBlocks():d.blocks
   }));
