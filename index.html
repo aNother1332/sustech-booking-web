@@ -99,7 +99,7 @@ label.f input,label.f select{color:var(--ink);font-size:14px}
       <div class="grow">
         <div class="big-step"><span class="n">1</span><span>手机<b>企业微信</b>「扫一扫」右侧二维码，会打开预约系统页面</span></div>
         <div class="big-step"><span class="n">2</span><span>点右上角 <b>··· → 复制链接</b></span></div>
-        <div class="big-step"><span class="n">3</span><span>粘贴到下面保存（抢场任务请在开抢前 2~3 分钟内提交，过早会失效）</span></div>
+        <div class="big-step"><span class="n">3</span><span>粘贴到下面保存，然后<b>尽快执行你要做的操作</b>。注意：链接<b>一次性</b>、约 5 分钟有效——<b>每执行一次操作（刷新/创建任务）都需要重新扫码</b></span></div>
         <textarea id="loginUrl" placeholder="https://reservation.sustech.edu.cn/clientMobile.html?code=xxxx...#/reservation/fastReservation"></textarea>
         <div class="row" style="margin-top:8px">
           <button onclick="saveLogin()">保存登录链接</button>
@@ -175,7 +175,7 @@ label.f input,label.f select{color:var(--ink);font-size:14px}
 
 <script>
 const $1=s=>document.querySelector(s);
-const LS={pat:'gb_pat',repo:'gb_repo',login:'gb_login'};
+const LS={pat:'gb_pat',repo:'gb_repo',login:'gb_login',loginUsed:'gb_login_used'};
 let PAT='',OWNER='',REPO='',LOGIN_URL='';
 let SNAPSHOT=null,GYMS=[],PICKS=[],PEND=null,CUR_GYM=null,CUR_COURT=null,CUR_DAY=0;
 let DISPATCHED=[];
@@ -246,8 +246,19 @@ function saveLogin(){
   const u=$1("#loginUrl").value.trim();
   if(!/code=/.test(u)){toast("链接不对：应包含 code= 参数（用企业微信扫码后复制）");return}
   LOGIN_URL=u;localStorage.setItem(LS.login,u);
-  $1("#loginMsg").textContent="已保存 ✓（约 10 分钟内有效）";
+  localStorage.removeItem(LS.loginUsed);
+  $1("#loginMsg").textContent="已保存 ✓（一次性、约 5 分钟内有效，请尽快执行操作）";
   toast("登录链接已保存");
+}
+function loginUsed(){return !!localStorage.getItem(LS.loginUsed)}
+function markLoginUsed(){
+  localStorage.setItem(LS.loginUsed,'1');
+  $1("#loginMsg").innerHTML="⚠ 本链接已被上一次操作消耗（一次性），<b>下一次操作前请重新扫码复制新链接</b>";
+}
+function guardLoginUsed(action){
+  if(!LOGIN_URL){toast("请先保存登录链接");return false}
+  if(loginUsed()){toast("当前登录链接已被上一次操作使用（一次性）。请重新扫码复制新链接并保存后再"+action);return false}
+  return true;
 }
 
 // ---------- 场次快照 ----------
@@ -268,12 +279,13 @@ function applySnapshot(){
   renderCourts();
 }
 async function refreshSnapshot(){
-  if(!LOGIN_URL){toast("请先保存登录链接");return}
+  if(!guardLoginUsed("刷新"))return;
   const btn=$1("#refreshBtn");btn.disabled=true;btn.textContent="刷新中（约1分钟）…";
   try{
     const gymId=$1("#gymSel").value||"1297443858304540673";
     const run=await dispatchWorkflow("refresh.yml",{login_url:LOGIN_URL,gym_id:gymId});
     if(!run)throw new Error("未找到运行记录");
+    markLoginUsed();
     $1("#snapMsg").innerHTML=`刷新中… <a href="${runUrl(run.id)}" target="_blank">查看进度</a>`;
     await waitRun(run.id,240000);
     await loadSnapshot();
@@ -388,7 +400,7 @@ function rmPick(i){PICKS.splice(i,1);renderPicks();renderGrid()}
 // ---------- 创建任务 ----------
 async function createTasks(){
   if(!PICKS.length){toast("请先选择场次");return}
-  if(!LOGIN_URL){toast("请先保存登录链接");return}
+  if(!guardLoginUsed("创建任务"))return;
   const phone=$1("#cfgPhone").value.trim();
   const fire=$1("#cfgFire").value.trim()||"20:00:00";
   const lead=+$1("#cfgLead").value||260;
@@ -396,8 +408,10 @@ async function createTasks(){
   const tryOthers=$1("#cfgTry").checked?"1":"0";
   const dry=$1("#cfgDry").checked?"1":"0";
   const btn=$1("#createBtn");btn.disabled=true;
+  const pending=PICKS.slice();
+  if(pending.length>1)toast(`登录链接是一次性的，本次只创建第 1 个：${pending[0].courtName} ${pending[0].date}；其余请重新扫码后再创建`);
   try{
-    for(const p of PICKS){
+    for(const p of pending.slice(0,1)){
       const now=new Date();
       const fireTime=p.mode==="rush"?fire:`${p2(now.getHours())}:${p2(now.getMinutes())}:${p2(now.getSeconds())}`;
       const run=await dispatchWorkflow("grab.yml",{
@@ -414,12 +428,12 @@ async function createTasks(){
       });
       if(run){DISPATCHED.unshift({runId:run.id,mode:p.mode,label:`${p.courtName} ${p.date} ${p.start}-${p.end}`});}
       renderRuns();
-      if(p.mode==="rush"){
-        toast(`抢场任务已提交（${p.date} 开抢前请保持登录链接有效）`);
-      }
     }
-    if(PICKS.some(p=>p.mode==="book"))toast("订场任务已提交，约 1 分钟出结果");
-    PICKS=[];renderPicks();renderGrid();
+    markLoginUsed();
+    toast("任务已提交，约 1 分钟出结果（抢场任务会等到开放时刻）");
+    PICKS=pending.slice(1);
+    renderPicks();renderGrid();
+    if(PICKS.length)$1("#taskMsg").textContent="还有 "+PICKS.length+" 个选择未创建：请重新扫码保存新链接后再点创建";
   }catch(e){toast("创建失败："+e.message)}
   btn.disabled=false;
 }
