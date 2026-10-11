@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>南科大预约助手 · 远程版</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#1c2b33;--mut:#697a83;--line:#e3e9ec;--acc:#0e9488;--acc2:#0b7c72;--red:#d9534f;--amber:#b7791f;--ok:#1e8e5a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:720px;margin:0 auto;padding:14px}
+header{position:sticky;top:0;z-index:9;background:linear-gradient(135deg,#0e9488,#0b7c72);color:#fff;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+header h1{font-size:17px;font-weight:600}
+header .sub{font-size:12px;opacity:.85}
+.card{background:var(--card);border-radius:12px;padding:16px;margin-top:14px;box-shadow:0 1px 3px rgba(16,42,51,.06)}
+.card h2{font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2 .tag{font-size:11px;background:#e6f4f2;color:var(--acc2);padding:1px 8px;border-radius:10px;font-weight:400}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grow{flex:1}
+button{border:0;border-radius:8px;padding:8px 16px;background:var(--acc);color:#fff;font-size:14px;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.sec{background:#eef3f4;color:var(--ink)}
+button.sm{padding:4px 10px;font-size:12px;border-radius:6px}
+input,select,textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;background:#fff;color:var(--ink)}
+input:focus,textarea:focus,select:focus{outline:2px solid #9fd8d2;border-color:var(--acc)}
+textarea{width:100%;min-height:56px;resize:vertical;font-size:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
+label.f input,label.f select{color:var(--ink);font-size:14px}
+.hint{font-size:12px;color:var(--mut);margin-top:6px}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:12px;font-size:12px;background:#eef3f4;color:var(--mut)}
+.pill.ok{background:#e2f5ea;color:var(--ok)}.pill.bad{background:#fdeceb;color:var(--red)}.pill.warn{background:#fbf0dc;color:var(--amber)}
+.big-step{display:flex;gap:8px;margin:8px 0;font-size:13px}
+.big-step .n{background:var(--acc);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;flex:none;margin-top:2px}
+.datebar{display:flex;gap:6px;overflow-x:auto;padding:4px 0}
+.datebar button{background:#eef3f4;color:var(--ink);padding:6px 12px;border-radius:8px;font-size:13px;white-space:nowrap}
+.datebar button.on{background:var(--acc);color:#fff}
+.datebar button.rushbtn{background:#fbf0dc;color:var(--amber);border:1px solid #eddcb1}
+.datebar button.rushbtn.on{background:#d9932a;color:#fff;border-color:#d9932a}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:10px}
+.slot{border:1.5px solid var(--line);border-radius:10px;padding:8px 6px;cursor:pointer;text-align:center;background:#fff}
+.slot .tm{font-weight:600;font-size:13px}
+.slot .st{font-size:11px;color:var(--ok)}
+.slot.full{opacity:.45;cursor:not-allowed;background:#f6f8f9}
+.slot.full .st{color:var(--red)}
+.slot.sel{border-color:var(--acc);background:#e9f7f5}
+.slot.pend{border-color:var(--amber);background:#fdf6e7}
+.slot.rush{border-color:#eddcb1}.slot.rush .st{color:var(--amber)}
+.slot.rush.sel{border-color:var(--amber);background:#fdf6e7}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#e9f7f5;border:1px solid #bfe5e0;color:var(--acc2);border-radius:16px;padding:3px 10px;font-size:12px;margin:3px 4px 0 0}
+.chip b{cursor:pointer;color:var(--red)}
+.chip.rush{background:#fbf0dc;border-color:#eddcb1;color:#a06a12}
+.run{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;font-size:13px}
+.status-chip{font-size:11px;padding:2px 8px;border-radius:10px;background:#eef3f4}
+.st-success{background:#e2f5ea;color:var(--ok)}.st-failed{background:#fdeceb;color:var(--red)}
+.st-in_progress,.st-queued{background:#e0f0fb;color:#1173b6}
+.muted{color:var(--mut);font-size:12px}
+.notice{background:#fff8e6;border:1px solid #f0e0b0;color:#7a5b13;border-radius:10px;padding:10px 12px;font-size:12px;margin-top:10px}
+.qrbox{text-align:center}
+.qrbox img{width:170px;height:170px;border:1px solid var(--line);border-radius:10px}
+.sw{position:relative;display:inline-block;width:40px;height:22px}
+.sw input{opacity:0;width:0;height:0}
+.sw i{position:absolute;inset:0;background:#cfd9dd;border-radius:20px;transition:.2s}
+.sw i:before{content:"";position:absolute;width:18px;height:18px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s}
+.sw input:checked+i{background:var(--acc)}
+.sw input:checked+i:before{transform:translateX(18px)}
+</style>
+</head>
+<body>
+<header><div class="wrap" style="padding:0">
+  <h1>南科大预约助手 · 远程版 <span id="connPill" class="pill" style="background:rgba(255,255,255,.2);color:#fff">未配置</span></h1>
+  <div class="sub">GitHub Pages 前端 + Actions 后端 · 手机浏览器即可完成全部操作</div>
+</div></header>
+<div class="wrap">
+
+<!-- 设置 -->
+<div class="card" id="setupCard">
+  <h2>① 连接设置 <span class="tag">只需配置一次，保存在本机浏览器</span></h2>
+  <div class="row">
+    <label class="f grow">GitHub 访问令牌（PAT，需 repo 权限）
+      <input id="cfgPat" type="password" placeholder="ghp_... 或 github_pat_...">
+    </label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label class="f">引擎仓库名
+      <input id="cfgRepo" value="sustech-booking-engine" style="width:200px">
+    </label>
+    <button class="sec" style="margin-top:16px" onclick="saveSettings()">保存并连接</button>
+    <span id="setupMsg" class="muted"></span>
+  </div>
+  <div class="notice">令牌只保存在你这台手机的浏览器里（localStorage），仅用于调用 GitHub API 触发你私有仓库中的工作流，不会发送到任何第三方服务器。建议创建仅含 <b>repo</b> 权限的经典令牌，用后可随时在 GitHub 设置里吊销。</div>
+</div>
+
+<div id="mainBox" style="display:none">
+
+  <!-- 登录 -->
+  <div class="card">
+    <h2>② 获取登录链接 <span class="tag">约 10 分钟有效</span></h2>
+    <div class="row" style="align-items:flex-start">
+      <div class="grow">
+        <div class="big-step"><span class="n">1</span><span>手机<b>企业微信</b>「扫一扫」右侧二维码，会打开预约系统页面</span></div>
+        <div class="big-step"><span class="n">2</span><span>点右上角 <b>··· → 复制链接</b></span></div>
+        <div class="big-step"><span class="n">3</span><span>粘贴到下面保存（抢场任务请在开抢前 2~3 分钟内提交，过早会失效）</span></div>
+        <textarea id="loginUrl" placeholder="https://reservation.sustech.edu.cn/clientMobile.html?code=xxxx...#/reservation/fastReservation"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button onclick="saveLogin()">保存登录链接</button>
+          <span id="loginMsg" class="muted"></span>
+        </div>
+      </div>
+      <div class="qrbox"><img src="qr.png" alt="登录二维码"><div class="hint">企业微信扫码</div></div>
+    </div>
+  </div>
+
+  <!-- 场次 -->
+  <div class="card">
+    <h2>③ 选择场馆与时段
+      <button class="sec sm" onclick="refreshSnapshot()" id="refreshBtn">刷新场次（约 1 分钟）</button>
+    </h2>
+    <div class="row">
+      <label class="f">场馆
+        <select id="gymSel" onchange="renderCourts()" style="min-width:220px"></select>
+      </label>
+      <span id="snapMsg" class="muted"></span>
+    </div>
+    <div id="courtBox" style="display:none;margin-top:10px">
+      <div class="row">
+        <label class="f">场地
+          <select id="courtSel" onchange="renderDays()" style="min-width:160px"></select>
+        </label>
+      </div>
+      <div id="dayArea" style="display:none;margin-top:10px">
+        <div class="datebar" id="dateBar"></div>
+        <div id="dayNote" class="hint" style="margin:2px 0 6px"></div>
+        <div id="slotGrid" class="grid"></div>
+        <div class="hint">点第一格记起点，再点一格选连续时段（最多 2 小时）；点击已选可取消。每个日期保留一个选择。</div>
+      </div>
+    </div>
+    <div id="pickList" style="margin-top:10px"></div>
+  </div>
+
+  <!-- 任务 -->
+  <div class="card">
+    <h2>④ 创建任务</h2>
+    <div class="row">
+      <label class="f">开抢时间<input id="cfgFire" value="20:00:00" style="width:100px"></label>
+      <label class="f">提前发出(ms)<input id="cfgLead" type="number" value="260" style="width:90px"></label>
+      <label class="f">重试窗口(秒)<input id="cfgWindow" type="number" value="240" style="width:90px"></label>
+      <label class="f">手机号<input id="cfgPhone" placeholder="11位手机号" style="width:130px"></label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span>同时尝试其它场地</span><label class="sw"><input type="checkbox" id="cfgTry" checked><i></i></label>
+      <span style="margin-left:12px">演练模式</span><label class="sw"><input type="checkbox" id="cfgDry"><i></i></label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button onclick="createTasks()" id="createBtn">创建任务</button>
+      <span class="muted" id="taskMsg"></span>
+    </div>
+    <div id="runList"></div>
+    <div class="notice">抢场任务（后天 · 20:00 开放）请<b>在 19:57 左右</b>点击创建——GitHub 运行器启动需 20~40 秒，过早提交会让登录链接在开抢前失效。订场任务（今天/明天）点击后立即执行。运行结果 1 分钟内回显。</div>
+  </div>
+
+  <div class="card">
+    <h2>说明</h2>
+    <div class="hint">
+      • 工作原理：本页（GitHub Pages）通过 GitHub API 触发你<b>私有仓库</b>里的 Actions 工作流；抢场在 GitHub 的美国服务器上执行（实测延迟约 216~241ms，零丢包），再由工作流把结果写回仓库、本页读取显示。<br>
+      • 所有操作都可在手机浏览器完成；电脑、代理、VPN 均不影响抢场延迟。<br>
+      • 登录链接只在触发工作流时作为私有参数传递，抢场时用完即弃；令牌只存在你手机浏览器里。<br>
+      • 一人一天最多 2 小时由引擎自动校验；多天选择会分别创建任务。<br>
+      • 本工具仅供个人学习自用，请遵守学校预约规则。
+    </div>
+  </div>
+</div>
+
+<div class="card" style="display:none" id="bootCard"><span class="muted">正在连接 GitHub…</span></div>
+</div>
+
+<script>
+const $1=s=>document.querySelector(s);
+const LS={pat:'gb_pat',repo:'gb_repo',login:'gb_login'};
+let PAT='',OWNER='',REPO='',LOGIN_URL='';
+let SNAPSHOT=null,GYMS=[],PICKS=[],PEND=null,CUR_GYM=null,CUR_COURT=null,CUR_DAY=0;
+let DISPATCHED=[];
+
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function toast(msg){const d=document.createElement("div");d.textContent=msg;d.style.cssText="position:fixed;left:50%;top:15%;transform:translateX(-50%);background:rgba(20,40,46,.92);color:#fff;padding:10px 18px;border-radius:10px;z-index:99;font-size:13px;max-width:86%";document.body.appendChild(d);setTimeout(()=>d.remove(),2800)}
+function p2(n){return String(n).padStart(2,"0")}
+function localDate(off){const d=new Date(Date.now()+(off||0)*864e5);return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())}
+function pad(t){t=String(t||"");return t.indexOf(":")<2?("0"+t):t}
+
+// ---------- GitHub API ----------
+async function ghApi(path,opts={}){
+  const r=await fetch("https://api.github.com"+path,{...opts,headers:{
+    "Authorization":"Bearer "+PAT,"Accept":"application/vnd.github+json","Content-Type":"application/json",...(opts.headers||{})}});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error((d&&d.message)||("HTTP "+r.status));
+  return d;
+}
+async function verifyPat(){
+  const u=await ghApi("/user");
+  OWNER=u.login;
+  const repo=await ghApi(`/repos/${OWNER}/${REPO}`);
+  return repo.full_name;
+}
+async function dispatchWorkflow(file,inputs){
+  await ghApi(`/repos/${OWNER}/${REPO}/actions/workflows/${file}/dispatches`,
+    {method:"POST",body:JSON.stringify({ref:"main",inputs})});
+  // 找到刚创建的运行
+  const t0=Date.now()-15000;
+  for(let i=0;i<20;i++){
+    await new Promise(r=>setTimeout(r,3000));
+    const d=await ghApi(`/repos/${OWNER}/${REPO}/actions/runs?event=workflow_dispatch&per_page=10`);
+    const run=(d.workflow_runs||[]).find(x=>x.path&&x.path.endsWith(file)&&new Date(x.created_at).getTime()>=t0);
+    if(run)return run;
+  }
+  return null;
+}
+async function readJsonFile(path){
+  const d=await ghApi(`/repos/${OWNER}/${REPO}/contents/${path}?t=${Date.now()}`);
+  const txt=decodeURIComponent(escape(atob((d.content||"").replace(/\n/g,""))));
+  return JSON.parse(txt);
+}
+function runUrl(id){return `https://github.com/${OWNER}/${REPO}/actions/runs/${id}`}
+
+// ---------- 设置 ----------
+function saveSettings(){
+  const pat=$1("#cfgPat").value.trim();
+  const repo=$1("#cfgRepo").value.trim()||"sustech-booking-engine";
+  if(!pat){toast("请先粘贴 GitHub 令牌");return}
+  PAT=pat;REPO=repo;
+  localStorage.setItem(LS.pat,pat);localStorage.setItem(LS.repo,repo);
+  $1("#setupMsg").textContent="连接中…";
+  verifyPat().then(full=>{
+    $1("#setupMsg").textContent="";
+    $1("#connPill").textContent="已连接";$1("#connPill").className="pill ok";
+    $1("#setupCard").style.display="none";
+    $1("#mainBox").style.display="";
+    LOGIN_URL=localStorage.getItem(LS.login)||"";
+    if(LOGIN_URL)$1("#loginUrl").value=LOGIN_URL;
+    loadSnapshot();
+    toast("已连接："+full);
+  }).catch(e=>{
+    $1("#setupMsg").textContent="连接失败："+e.message;
+    $1("#connPill").textContent="连接失败";$1("#connPill").className="pill bad";
+  });
+}
+function saveLogin(){
+  const u=$1("#loginUrl").value.trim();
+  if(!/code=/.test(u)){toast("链接不对：应包含 code= 参数（用企业微信扫码后复制）");return}
+  LOGIN_URL=u;localStorage.setItem(LS.login,u);
+  $1("#loginMsg").textContent="已保存 ✓（约 10 分钟内有效）";
+  toast("登录链接已保存");
+}
+
+// ---------- 场次快照 ----------
+async function loadSnapshot(){
+  try{
+    SNAPSHOT=await readJsonFile("snapshot.json");
+    applySnapshot();
+  }catch(e){ $1("#snapMsg").textContent="暂无场次数据（还没刷新过）"; }
+}
+function applySnapshot(){
+  if(!SNAPSHOT)return;
+  GYMS=SNAPSHOT.gyms&&SNAPSHOT.gyms.length?SNAPSHOT.gyms:[];
+  const sel=$1("#gymSel");
+  const cur=sel.value||SNAPSHOT.gymId||"";
+  sel.innerHTML=(GYMS.length?GYMS:[{id:"1297443858304540673",name:"润杨羽毛球馆"}])
+    .map(g=>`<option value="${g.id}" ${g.id===cur?"selected":""}>${esc(g.name)}</option>`).join("");
+  $1("#snapMsg").textContent="场次更新于 "+esc(SNAPSHOT.updatedAt||"?");
+  renderCourts();
+}
+async function refreshSnapshot(){
+  if(!LOGIN_URL){toast("请先保存登录链接");return}
+  const btn=$1("#refreshBtn");btn.disabled=true;btn.textContent="刷新中（约1分钟）…";
+  try{
+    const gymId=$1("#gymSel").value||"1297443858304540673";
+    const run=await dispatchWorkflow("refresh.yml",{login_url:LOGIN_URL,gym_id:gymId});
+    if(!run)throw new Error("未找到运行记录");
+    $1("#snapMsg").innerHTML=`刷新中… <a href="${runUrl(run.id)}" target="_blank">查看进度</a>`;
+    await waitRun(run.id,240000);
+    await loadSnapshot();
+    toast("场次已刷新");
+  }catch(e){toast("刷新失败："+e.message)}
+  btn.disabled=false;btn.textContent="刷新场次（约 1 分钟）";
+}
+async function waitRun(id,timeoutMs){
+  const t0=Date.now();
+  while(Date.now()-t0<timeoutMs){
+    const r=await ghApi(`/repos/${OWNER}/${REPO}/actions/runs/${id}`);
+    if(r.status==="completed")return r;
+    await new Promise(x=>setTimeout(x,6000));
+  }
+  return null;
+}
+function renderCourts(){
+  if(!SNAPSHOT)return;
+  CUR_GYM=$1("#gymSel").value;
+  $1("#courtBox").style.display="";
+  const courts=(SNAPSHOT.courts||[]).filter(c=>!c.error);
+  const sel=$1("#courtSel");
+  sel.innerHTML='<option value="">— 选择场地 —</option>'+courts.map(c=>
+    `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  $1("#dayArea").style.display="none";
+  if(courts.length===1){sel.value=courts[0].id;renderDays()}
+  renderPicks();
+}
+function currentCourt(){
+  const id=$1("#courtSel").value;
+  return ((SNAPSHOT||{}).courts||[]).find(c=>String(c.id)===String(id))||null;
+}
+function synthBlocks(){
+  const out=[];
+  for(let h=8;h<=22;h++){out.push({time:p2(h)+":00",endTime:p2(h)+":30",status:"1",virtual:true});
+    out.push({time:p2(h)+":30",endTime:p2(h+1)+":00",status:"1",virtual:true});}
+  return out;
+}
+function renderDays(){
+  CUR_COURT=currentCourt();
+  if(!CUR_COURT){$1("#dayArea").style.display="none";return}
+  $1("#dayArea").style.display="";
+  window._days=(CUR_COURT.days||[]).map(d=>({
+    date:d.date, mode:d.mode,
+    blocks:(d.blocks==="placeholder"||!Array.isArray(d.blocks))?synthBlocks():d.blocks
+  }));
+  CUR_DAY=Math.min(CUR_DAY,Math.max(0,window._days.length-1));
+  renderDates();
+}
+function renderDates(){
+  const names={};names[localDate(0)]="今天";names[localDate(1)]="明天";names[localDate(2)]="后天";
+  $1("#dateBar").innerHTML=(window._days||[]).map((d,i)=>{
+    const w=new Date(d.date+"T00:00:00").getDay();
+    const label=(names[d.date]||"")+" "+d.date.slice(5)+" 周"+"日一二三四五六"[w];
+    return `<button class="${d.mode==="rush"?"rushbtn":""} ${CUR_DAY===i?"on":""}" onclick="pickDay(${i})">${label}${d.mode==="rush"?" · 抢场":" · 订场"}</button>`;
+  }).join("");
+  renderGrid();
+}
+function pickDay(i){CUR_DAY=i;renderDates()}
+function renderGrid(){
+  const day=(window._days||[])[CUR_DAY];if(!day)return;
+  const blocks=day.blocks||[];
+  const pick=PICKS.find(p=>p.date===day.date);
+  const pend=(PEND&&PEND.date===day.date&&PEND.courtId===CUR_COURT.id)?PEND.b:null;
+  const booked=(SNAPSHOT.bookedByDate||{})[day.date]||0;
+  const remaining=Math.max(0,2-booked);
+  let note="";
+  if(day.mode==="rush")note=`<span style="color:var(--amber)">抢场模式：${day.date.slice(5)} 于前一日 20:00 开放，任务将在开放瞬间提交${booked?`（当日已约 ${booked} 小时）`:""}</span>`;
+  else note=`订场模式：立即提交${booked?` · 当日已约 ${booked} 小时，最多还能选 ${remaining} 小时`:" · 单次最多 2 小时"}`;
+  const other=PICKS.find(p=>p.date===day.date&&String(p.courtId)!==String(CUR_COURT.id));
+  if(other)note+=`<br>该日已选择 <b>${esc(other.courtName)} ${esc(other.start)}-${esc(other.end)}</b>（重新选择将替换）`;
+  $1("#dayNote").innerHTML=note;
+  $1("#slotGrid").innerHTML=blocks.map((b,i)=>{
+    const ok=day.mode==="rush"?true:Number(b.status)===1;
+    const inPick=pick&&String(pick.courtId)===String(CUR_COURT.id)&&i>=pick.bidx&&i<=pick.eidx;
+    const isPend=pend===i;
+    return `<div class="slot ${day.mode==="rush"?"rush":""} ${ok?"":"full"} ${inPick?"sel":""} ${isPend?"pend":""}" ${ok?`onclick="slotClick(${i})"`:""}>
+      <div class="tm">${esc(pad(b.time))}-${esc(pad(b.endTime))}</div>
+      <div class="st">${ok?(inPick?"已选 ✓":isPend?"起点":"可约"):"已被预约"}</div></div>`;
+  }).join("");
+}
+function slotClick(i){
+  const day=(window._days||[])[CUR_DAY];if(!day)return;
+  const blocks=day.blocks||[];
+  const b=blocks[i];
+  const ok=day.mode==="rush"?true:(b&&Number(b.status)===1);
+  if(!b||!ok){toast("该时段不可约");return}
+  const exist=PICKS.find(p=>p.date===day.date);
+  if(exist&&String(exist.courtId)===String(CUR_COURT.id)&&i>=exist.bidx&&i<=exist.eidx){
+    PICKS=PICKS.filter(p=>p!==exist);PEND=null;renderPicks();renderGrid();return;
+  }
+  if(!PEND||PEND.date!==day.date||PEND.courtId!==CUR_COURT.id){PEND={date:day.date,courtId:CUR_COURT.id,b:i};renderGrid();return}
+  const lo=Math.min(PEND.b,i),hi=Math.max(PEND.b,i);
+  const seg=blocks.slice(lo,hi+1);
+  if(day.mode==="book"&&seg.some(x=>Number(x.status)!==1)){toast("范围内含已被预约的时段");PEND=null;renderGrid();return}
+  const hours=seg.length*0.5;
+  if(hours>2){toast("单次最多 2 小时");PEND=null;renderGrid();return}
+  const booked=(SNAPSHOT.bookedByDate||{})[day.date]||0;
+  if(booked+hours>2+1e-6){toast(`该日已约 ${booked} 小时，剩余不足`);PEND=null;renderGrid();return}
+  PICKS=PICKS.filter(p=>p.date!==day.date);
+  PICKS.push({gymId:CUR_GYM,courtId:CUR_COURT.id,courtName:CUR_COURT.name,
+    date:day.date,mode:day.mode,start:pad(blocks[lo].time),end:pad(blocks[hi].endTime),bidx:lo,eidx:hi});
+  PEND=null;renderPicks();renderGrid();
+}
+function renderPicks(){
+  $1("#pickList").innerHTML=PICKS.length?PICKS.map((p,i)=>
+    `<span class="chip ${p.mode==="rush"?"rush":""}">${p.mode==="rush"?"[抢]":"[订]"} ${esc(p.courtName)} ${esc(p.date.slice(5))} ${esc(p.start)}-${esc(p.end)}<b onclick="rmPick(${i})">✕</b></span>`).join("")
+    :'<span class="muted">尚未选择场次</span>';
+}
+function rmPick(i){PICKS.splice(i,1);renderPicks();renderGrid()}
+
+// ---------- 创建任务 ----------
+async function createTasks(){
+  if(!PICKS.length){toast("请先选择场次");return}
+  if(!LOGIN_URL){toast("请先保存登录链接");return}
+  const phone=$1("#cfgPhone").value.trim();
+  const fire=$1("#cfgFire").value.trim()||"20:00:00";
+  const lead=+$1("#cfgLead").value||260;
+  const win=+$1("#cfgWindow").value||240;
+  const tryOthers=$1("#cfgTry").checked?"1":"0";
+  const dry=$1("#cfgDry").checked?"1":"0";
+  const btn=$1("#createBtn");btn.disabled=true;
+  try{
+    for(const p of PICKS){
+      const now=new Date();
+      const fireTime=p.mode==="rush"?fire:`${p2(now.getHours())}:${p2(now.getMinutes())}:${p2(now.getSeconds())}`;
+      const run=await dispatchWorkflow("grab.yml",{
+        login_url:LOGIN_URL,
+        gym_id:String(p.gymId),
+        pairs:JSON.stringify([{groundId:String(p.courtId),groundName:p.courtName,start:p.start,end:p.end}]),
+        target_date:p.date,
+        fire_time:fireTime,
+        lead_ms:String(lead),
+        phone:phone,
+        try_others:tryOthers,
+        dry_run:dry,
+        window_seconds:String(win),
+      });
+      if(run){DISPATCHED.unshift({runId:run.id,mode:p.mode,label:`${p.courtName} ${p.date} ${p.start}-${p.end}`});}
+      renderRuns();
+      if(p.mode==="rush"){
+        toast(`抢场任务已提交（${p.date} 开抢前请保持登录链接有效）`);
+      }
+    }
+    if(PICKS.some(p=>p.mode==="book"))toast("订场任务已提交，约 1 分钟出结果");
+    PICKS=[];renderPicks();renderGrid();
+  }catch(e){toast("创建失败："+e.message)}
+  btn.disabled=false;
+}
+function renderRuns(){
+  $1("#runList").innerHTML=DISPATCHED.map(x=>`
+    <div class="run">
+      <div class="row"><span class="status-chip" id="st-${x.runId}">排队中</span>
+        <b>${esc(x.mode==="rush"?"抢场":"订场")}</b><span class="muted">${esc(x.label)}</span>
+        <span class="grow"></span><a href="${runUrl(x.runId)}" target="_blank" class="muted">查看运行日志</a></div>
+      <div class="muted" id="res-${x.runId}" style="margin-top:6px"></div>
+    </div>`).join("");
+  DISPATCHED.slice(0,4).forEach(x=>watchRun(x.runId));
+}
+async function watchRun(id){
+  if(window["_watching_"+id])return;window["_watching_"+id]=true;
+  for(let i=0;i<200;i++){
+    let r;try{r=await ghApi(`/repos/${OWNER}/${REPO}/actions/runs/${id}`)}catch(e){return}
+    const chip=$1("#st-"+id);if(!chip)return;
+    chip.textContent=r.status==="completed"?(r.conclusion||"完成"):(r.status==="in_progress"?"执行中":"排队中");
+    chip.className="status-chip "+(r.status==="completed"?(r.conclusion==="success"?"st-success":"st-failed"):"st-in_progress");
+    if(r.status==="completed"){
+      try{
+        const res=await readJsonFile("last_result.json");
+        const o=res.order||{};
+        $1("#res-"+id).innerHTML=res.status==="success"?
+          `🎉 抢到了：<b>${esc(o.groundName||"")}</b> ${esc((o.startTime||"").slice(0,16))} 订单号 <b>${esc(o.orderNo||"")}</b>`:
+          (res.status==="dryrun_done"?"演练完成 ✓（配置无误，可关闭演练正式抢场）":
+           `未成功：${esc(res.error||res.status)}`);
+      }catch(e){$1("#res-"+id).textContent="结果读取失败（可点右上角看运行日志）"}
+      return;
+    }
+    await new Promise(x=>setTimeout(x,15000));
+  }
+}
+
+// ---------- 启动 ----------
+(function boot(){
+  const pat=localStorage.getItem(LS.pat),repo=localStorage.getItem(LS.repo);
+  if(pat&&repo){
+    PAT=pat;REPO=repo;$1("#cfgPat").value=pat;$1("#cfgRepo").value=repo;
+    verifyPat().then(full=>{
+      $1("#connPill").textContent="已连接";$1("#connPill").className="pill ok";
+      $1("#setupCard").style.display="none";$1("#mainBox").style.display="";
+      LOGIN_URL=localStorage.getItem(LS.login)||"";
+      if(LOGIN_URL)$1("#loginUrl").value=LOGIN_URL;
+      loadSnapshot();
+    }).catch(e=>{
+      $1("#connPill").textContent="连接失败";$1("#connPill").className="pill bad";
+      $1("#setupMsg").textContent="上次配置连接失败：" + e.message;
+    });
+  }
+})();
+</script>
+</body>
+</html>
