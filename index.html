@@ -436,20 +436,45 @@ async function finishRefresh(fin,prevTs){
     $1("#snapMsg").innerHTML+=' ｜ <span style="color:var(--amber)">本次刷新未成功，显示的是旧数据</span>';
   }
 }
+function gymNameOf(id){
+  const g=(GYMS||[]).find(x=>String(x.id)===String(id));
+  if(g)return g.name;
+  if(SNAPSHOT&&String(SNAPSHOT.gymId||"")===String(id)&&SNAPSHOT.gymName)return SNAPSHOT.gymName;
+  return "";
+}
 function renderCourts(){
   if(!SNAPSHOT)return;
   CUR_GYM=$1("#gymSel").value;
   $1("#courtBox").style.display="";
+  const sel=$1("#courtSel");
+  const snapGym=String(SNAPSHOT.gymId||"");
+  if(snapGym&&String(CUR_GYM)!==snapGym){
+    // 已切到别的场馆：场地列表属于上一次刷新的场馆，不能当成本场馆的场地用
+    //（各场馆场地数不同：足球场 2 块、乒乓球 15 块…）
+    sel.innerHTML='<option value="">— 请先刷新该场馆 —</option>';
+    $1("#dayArea").style.display="none";
+    $1("#snapMsg").innerHTML=`已切换到「${esc(gymNameOf(CUR_GYM)||"该场馆")}」：点 <b>刷新场次</b> 加载它的场地列表`
+      +`（当前显示的是「${esc(gymNameOf(snapGym)||"上一场馆")}」的数据，共 ${(SNAPSHOT.courts||[]).length} 块场地）`;
+    renderPicks();
+    return;
+  }
   const all=(SNAPSHOT.courts||[]);
   const ok=all.filter(c=>!c.error);
   const bad=all.filter(c=>c.error);
-  const sel=$1("#courtSel");
+  if(!all.length){
+    sel.innerHTML='<option value="">— 无场地数据 —</option>';
+    $1("#dayArea").style.display="none";
+    $1("#snapMsg").innerHTML=`「${esc(gymNameOf(snapGym)||"本场馆")}」未读到任何场地（接口可能异常），可再点一次「刷新场次」`;
+    renderPicks();
+    return;
+  }
   sel.innerHTML='<option value="">— 选择场地 —</option>'+
     all.map(c=>{
       const staleTag=(c.days&&c.days.length&&c.stale)?"（数据为缓存）":(c.error?"（数据未获取·仍可抢后天）":"");
       return `<option value="${c.id}">${esc(c.name)}${staleTag}</option>`;
     }).join("");
-  if(bad.length)$1("#snapMsg").textContent=($1("#snapMsg").textContent.split("｜")[0])+" ｜ ⚠ "+bad.length+" 块场地未取到实时数据（抢场不受影响）";
+  $1("#snapMsg").textContent=`场次更新于 ${SNAPSHOT.updatedAt||"?"} · ${gymNameOf(snapGym)||"本场馆"} · 共 ${all.length} 块场地`
+    +(bad.length?` ｜ ⚠ ${bad.length} 块场地未取到实时数据（抢场不受影响）`:"");
   $1("#dayArea").style.display="none";
   if(ok.length===1){sel.value=ok[0].id;renderDays()}
   renderPicks();
