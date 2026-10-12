@@ -51,7 +51,7 @@ label.f input,label.f select{color:var(--ink);font-size:14px}
 .chip.rush{background:#fbf0dc;border-color:#eddcb1;color:#a06a12}
 .run{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;font-size:13px}
 .status-chip{font-size:11px;padding:2px 8px;border-radius:10px;background:#eef3f4}
-.st-success{background:#e2f5ea;color:var(--ok)}.st-failed{background:#fdeceb;color:var(--red)}
+.st-success{background:#e2f5ea;color:var(--ok)}.st-failed{background:#fdeceb;color:var(--red)}.st-in-progress{background:#e8f0fe;color:#1a5fb4}
 .st-in_progress,.st-queued{background:#e0f0fb;color:#1173b6}
 .muted{color:var(--mut);font-size:12px}
 .notice{background:#fff8e6;border:1px solid #f0e0b0;color:#7a5b13;border-radius:10px;padding:10px 12px;font-size:12px;margin-top:10px}
@@ -113,7 +113,7 @@ label.f input,label.f select{color:var(--ink);font-size:14px}
   <!-- 场次 -->
   <div class="card">
     <h2>③ 选择场馆与时段
-      <button class="sec sm" onclick="refreshSnapshot()" id="refreshBtn">刷新场次（约 1 分钟）</button>
+      <button class="sec sm" onclick="refreshSnapshot()" id="refreshBtn">刷新场次</button>
     </h2>
     <div class="row">
       <label class="f">场馆
@@ -219,6 +219,27 @@ async function readJsonFile(path){
   return JSON.parse(txt);
 }
 function runUrl(id){return `https://github.com/${OWNER}/${REPO}/actions/runs/${id}`}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+async function readJsonNewer(path,isNew,tries=8,gapMs=5000){
+  // 持续读取文件直到满足 isNew（= 本次操作产生的新数据），容忍 GitHub 回传/缓存延迟
+  let data=null;
+  for(let i=0;i<tries;i++){
+    try{data=await readJsonFile(path);if(isNew(data))return{data,fresh:true}}catch(e){}
+    if(i<tries-1)await sleep(gapMs);
+  }
+  return {data,fresh:false};
+}
+async function waitRunLive(id,onTick,maxMs=900000,intervalMs=5000){
+  // 轮询运行状态：每轮回调进度文字；返回最终运行对象，超时返回 null
+  const t0=Date.now();
+  while(Date.now()-t0<maxMs){
+    let r=null;
+    try{r=await ghApi(`/repos/${OWNER}/${REPO}/actions/runs/${id}`)}catch(e){}
+    if(r){if(onTick)onTick(r);if(r.status==="completed")return r}
+    await sleep(intervalMs);
+  }
+  return null;
+}
 
 // ---------- 设置 ----------
 function saveSettings(){
@@ -273,30 +294,58 @@ async function validateAndSave(){
   if(!/code=/.test(u)){toast("链接不对：应包含 code= 参数（用企业微信扫码后复制）");return}
   if(!PAT){toast("请先完成上方连接设置");return}
   LOGIN_URL=u;localStorage.setItem(LS.login,u);
-  const btn=$1("#saveLoginBtn");btn.disabled=true;btn.textContent="验证中（约 1 分钟）…";
-  msgLock=Date.now()+900000;
-  $1("#loginMsg").textContent="正在验证链接有效性…";
+  const btn=$1("#saveLoginBtn");btn.disabled=true;btn.textContent="验证中…";
+  msgLock=Date.now()+3600000;
+  $1("#loginMsg").innerHTML="正在提交验证任务…";
   try{
+    const prev=(sessionState()||{}).validatedAt||0;
     const run=await dispatchWorkflow("login.yml",{login_url:u});
     if(!run)throw new Error("未找到运行记录");
-    const fin=await waitRun(run.id,240000);
-    const s=await readJsonFile("session_state.json").catch(()=>null);
-    if(fin&&fin.conclusion==="success"&&s&&s.ok){
-      localStorage.setItem(LS.session,JSON.stringify({validatedAt:s.validatedAt}));
-      msgLock=0;renderSessionStatus();
-      toast("✅ 链接有效，登录态已保存（约 9 分钟内无需重新扫码）");
-    }else if(s&&s.ok&&sessionRemaining()>0){
-      $1("#loginMsg").innerHTML=`⚠ 本次链接无效（可能已被使用），但<b>先前登录态仍有效（剩余 ${fmtRemain(sessionRemaining())}）</b>，可直接刷新/创建`;
-      msgLock=Date.now()+15000;
-    }else{
-      $1("#loginMsg").textContent="❌ 链接验证失败（已失效或已被使用）——请重新扫码复制新链接；可打开运行日志查看原因";
-      msgLock=Date.now()+15000;
+    const tick=r=>{$1("#loginMsg").innerHTML=`正在验证：${r.status==="in_progress"?"运行中":"排队等待"}… <a href="${runUrl(run.id)}" target="_blank">查看进度</a>`};
+    tick(run);
+    const fin=await waitRunLive(run.id,tick,900000);
+    if(!fin){
+      $1("#loginMsg").innerHTML=`⏳ 仍在排队/运行中（GitHub 调度较慢）：<a href="${runUrl(run.id)}" target="_blank">查看进度</a>；完成后结果会自动显示`;
+      btn.disabled=false;btn.textContent="验证链接并保存";
+      waitRunLive(run.id,null,3600000,20000).then(f2=>{if(f2)finishValidation(f2,prev)});
+      return;
     }
+    await finishValidation(fin,prev);
   }catch(e){
     $1("#loginMsg").textContent="❌ 验证失败："+e.message;
     msgLock=Date.now()+15000;
   }
   btn.disabled=false;btn.textContent="验证链接并保存";
+  setTimeout(renderSessionStatus,0);
+}
+async function finishValidation(fin,prevValidatedAt){
+  let s=null;
+  if(fin&&fin.conclusion==="success"){
+    msgLock=Date.now()+3600000;
+    $1("#loginMsg").innerHTML=`验证完成，正在读取登录态… <a href="${runUrl(fin.id)}" target="_blank">查看进度</a>`;
+    const r=await readJsonNewer("session_state.json",
+      x=>x&&x.ok&&x.validatedAt&&(x.validatedAt||0)>prevValidatedAt+0.5,10,4000);
+    if(r.fresh){s=r.data}
+  }else{
+    const r=await readJsonNewer("session_state.json",x=>x&&x.ok&&x.validatedAt,3,3000);
+    s=r.data;
+  }
+  if(fin&&fin.conclusion==="success"&&s&&s.ok){
+    localStorage.setItem(LS.session,JSON.stringify({validatedAt:s.validatedAt}));
+    msgLock=0;renderSessionStatus();
+    toast("✅ 链接有效，登录态已保存（约 9 分钟内无需重新扫码）");
+  }else if(fin&&fin.conclusion==="success"){
+    msgLock=Date.now()+30000;
+    $1("#loginMsg").innerHTML=`⚠ 验证已成功，但登录态数据回传有延迟：请稍等后重新点「验证链接并保存」，或 <a href="${runUrl(fin.id)}" target="_blank">查看运行日志</a>`;
+  }else if(s&&s.ok&&sessionRemaining()>0){
+    msgLock=Date.now()+15000;
+    $1("#loginMsg").innerHTML=`⚠ 本次链接无效（可能已被使用），但<b>先前登录态仍有效（剩余 ${fmtRemain(sessionRemaining())}）</b>，可直接刷新/创建`;
+  }else{
+    msgLock=Date.now()+15000;
+    $1("#loginMsg").innerHTML=`❌ 链接验证失败（已失效或已被使用）——请重新扫码复制新链接；<a href="${fin?runUrl(fin.id):"#"}" target="_blank">查看运行日志</a>`;
+  }
+  const btn=$1("#saveLoginBtn");
+  if(btn){btn.disabled=false;btn.textContent="验证链接并保存"}
   setTimeout(renderSessionStatus,0);
 }
 function restoreSessionFromRepo(){
@@ -344,30 +393,42 @@ function applySnapshot(){
 }
 async function refreshSnapshot(){
   if(!needFreshSession("刷新场次"))return;
-  const btn=$1("#refreshBtn");btn.disabled=true;btn.textContent="刷新中（约1分钟）…";
+  const btn=$1("#refreshBtn");btn.disabled=true;btn.textContent="刷新中…";
   try{
     const gymId=$1("#gymSel").value||"1297443858304540673";
+    const prevTs=(SNAPSHOT&&SNAPSHOT.ts)||0;
     const run=await dispatchWorkflow("refresh.yml",{login_url:LOGIN_URL,gym_id:gymId});
     if(!run)throw new Error("未找到运行记录");
     noteLegacyUse();
-    $1("#snapMsg").innerHTML=`刷新中… <a href="${runUrl(run.id)}" target="_blank">查看进度</a>`;
-    const fin=await waitRun(run.id,240000);
-    await loadSnapshot();
-    if(fin&&fin.conclusion!=="success"){
-      toast("刷新未成功（学校接口可能暂不可用），已保留上次数据");
-      $1("#snapMsg").innerHTML+=` ｜ <span style="color:var(--amber)">本次刷新未成功，显示的是旧数据</span>`;
-    }else{toast("场次已刷新");}
+    const tick=r=>{$1("#snapMsg").innerHTML=`${r.status==="in_progress"?"运行中":"排队等待"}… <a href="${runUrl(run.id)}" target="_blank">查看进度</a>`};
+    tick(run);
+    const fin=await waitRunLive(run.id,tick,900000);
+    if(!fin){
+      $1("#snapMsg").innerHTML=`⏳ 仍在排队/运行中（GitHub 调度较慢）：<a href="${runUrl(run.id)}" target="_blank">查看进度</a>；完成后结果会自动显示`;
+      btn.disabled=false;btn.textContent="刷新场次";
+      waitRunLive(run.id,null,3600000,20000).then(f2=>finishRefresh(f2,prevTs));
+      return;
+    }
+    await finishRefresh(fin,prevTs);
   }catch(e){toast("刷新失败："+e.message)}
-  btn.disabled=false;btn.textContent="刷新场次（约 1 分钟）";
+  btn.disabled=false;btn.textContent="刷新场次";
 }
-async function waitRun(id,timeoutMs){
-  const t0=Date.now();
-  while(Date.now()-t0<timeoutMs){
-    const r=await ghApi(`/repos/${OWNER}/${REPO}/actions/runs/${id}`);
-    if(r.status==="completed")return r;
-    await new Promise(x=>setTimeout(x,6000));
+async function finishRefresh(fin,prevTs){
+  if(!fin)return;
+  if(fin.conclusion==="success"){
+    $1("#snapMsg").innerHTML=`刷新完成，正在读取新场次… <a href="${runUrl(fin.id)}" target="_blank">查看进度</a>`;
+    const r=await readJsonNewer("snapshot.json",s=>s&&s.ts&&s.ts>prevTs+0.5,12,4000);
+    if(r.fresh){SNAPSHOT=r.data;applySnapshot();toast("场次已刷新");}
+    else{
+      await loadSnapshot();
+      toast("刷新已完成，但新数据回传有延迟");
+      $1("#snapMsg").innerHTML+=' ｜ <span style="color:var(--amber)">新数据尚未可读，稍后可再点一次「刷新场次」</span>';
+    }
+  }else{
+    await loadSnapshot();
+    toast("刷新未成功（登录态可能已过期、或学校接口暂不可用），已保留上次数据");
+    $1("#snapMsg").innerHTML+=' ｜ <span style="color:var(--amber)">本次刷新未成功，显示的是旧数据</span>';
   }
-  return null;
 }
 function renderCourts(){
   if(!SNAPSHOT)return;
@@ -515,7 +576,7 @@ async function createTasks(){
         dry_run:dry,
         window_seconds:String(win),
       });
-      if(run){DISPATCHED.unshift({runId:run.id,mode:p.mode,label:`${p.courtName} ${p.date} ${p.start}-${p.end}`});}
+      if(run){DISPATCHED.unshift({runId:run.id,mode:p.mode,createdAt:Date.parse(run.created_at)||Date.now(),label:`${p.courtName} ${p.date} ${p.start}-${p.end}`});}
       renderRuns();
     }
     noteLegacyUse();
@@ -538,25 +599,37 @@ function renderRuns(){
 }
 async function watchRun(id){
   if(window["_watching_"+id])return;window["_watching_"+id]=true;
-  for(let i=0;i<200;i++){
-    let r;try{r=await ghApi(`/repos/${OWNER}/${REPO}/actions/runs/${id}`)}catch(e){return}
-    const chip=$1("#st-"+id);if(!chip)return;
+  const meta=DISPATCHED.find(x=>x.runId===id)||{};
+  const createdMs=meta.createdAt||(Date.now()-30000);
+  let errs=0;
+  for(let i=0;i<240;i++){
+    let r=null;
+    try{r=await ghApi(`/repos/${OWNER}/${REPO}/actions/runs/${id}`);errs=0}
+    catch(e){if(++errs>=5){window["_watching_"+id]=false;const c=$1("#st-"+id);if(c){c.textContent="状态未知";c.className="status-chip"}return}await sleep(15000);continue}
+    const chip=$1("#st-"+id);if(!chip){window["_watching_"+id]=false;return}
     chip.textContent=r.status==="completed"?(r.conclusion||"完成"):(r.status==="in_progress"?"执行中":"排队中");
-    chip.className="status-chip "+(r.status==="completed"?(r.conclusion==="success"?"st-success":"st-failed"):"st-in_progress");
+    chip.className="status-chip "+(r.status==="completed"?(r.conclusion==="success"?"st-success":"st-failed"):"st-in-progress");
     if(r.status==="completed"){
-      try{
-        const res=await readJsonFile("last_result.json");
+      // 结果新鲜度：文件里带 runId 时必须完全匹配；否则退回时间戳判断（旧数据不显示）
+      const pred=x=>x&&(x.runId?String(x.runId)===String(id):((x.finishedAt||x.startedAt||0)*1000>=createdMs-30000));
+      const {data:res,fresh}=await readJsonNewer("last_result.json",pred,3,4000);
+      if(fresh&&res){
         const o=res.order||{};
         $1("#res-"+id).innerHTML=res.status==="success"?
           `🎉 抢到了：<b>${esc(o.groundName||"")}</b> ${esc((o.startTime||"").slice(0,16))} 订单号 <b>${esc(o.orderNo||"")}</b>`:
           (res.status==="dryrun_done"?"演练完成 ✓（配置无误，可关闭演练正式抢场）":
            (res.status==="starting"?"⚠ 任务被中断（未产生新结果，可查看运行日志了解进度）":
             `未成功：${esc(res.error||res.status)}`));
-      }catch(e){$1("#res-"+id).textContent="结果读取失败（可点右上角看运行日志）"}
-      return;
+        return;
+      }
+      $1("#res-"+id).textContent="任务已结束，结果回传中…（自动重试）";
+      await sleep(12000);
+      continue;
     }
-    await new Promise(x=>setTimeout(x,15000));
+    await sleep(15000);
   }
+  window["_watching_"+id]=false;
+  const c=$1("#st-"+id);if(c&&c.textContent==="排队中")c.textContent="状态未知";
 }
 
 // ---------- 启动 ----------
