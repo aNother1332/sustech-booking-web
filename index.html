@@ -306,8 +306,16 @@ function restoreSessionFromRepo(){
 }
 function needFreshSession(action){
   if(!LOGIN_URL){toast("请先粘贴登录链接并验证");return false}
-  if(sessionRemaining()<=0){toast(`登录态已过期或未验证，无法${action}：请重新扫码后点「验证链接并保存」`);return false}
+  if(sessionRemaining()<=0){
+    // 未验证/已过期：降级为旧的一次性模式（引擎侧仍会兑换链接），不阻断操作
+    toast(`未验证登录链接：本次按旧方式直接使用（一次性）。建议改点「验证链接并保存」，9 分钟内可复用`);
+  }
   return true;
+}
+function noteLegacyUse(){
+  if(sessionRemaining()>0)return;
+  msgLock=Date.now()+30000;
+  $1("#loginMsg").innerHTML='⚠ 未验证模式：链接已被本次操作消耗，下次操作前请重新扫码；点「验证链接并保存」可 9 分钟内免扫码';
 }
 function rushFireEpoch(fireStr){
   const m=/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(fireStr||"");
@@ -341,6 +349,7 @@ async function refreshSnapshot(){
     const gymId=$1("#gymSel").value||"1297443858304540673";
     const run=await dispatchWorkflow("refresh.yml",{login_url:LOGIN_URL,gym_id:gymId});
     if(!run)throw new Error("未找到运行记录");
+    noteLegacyUse();
     $1("#snapMsg").innerHTML=`刷新中… <a href="${runUrl(run.id)}" target="_blank">查看进度</a>`;
     const fin=await waitRun(run.id,240000);
     await loadSnapshot();
@@ -509,6 +518,7 @@ async function createTasks(){
       if(run){DISPATCHED.unshift({runId:run.id,mode:p.mode,label:`${p.courtName} ${p.date} ${p.start}-${p.end}`});}
       renderRuns();
     }
+    noteLegacyUse();
     toast("任务已提交，约 1 分钟出结果（抢场任务会等到开放时刻）");
     PICKS=pending.slice(1);
     renderPicks();renderGrid();
